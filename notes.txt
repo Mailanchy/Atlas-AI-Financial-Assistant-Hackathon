@@ -1,0 +1,189 @@
+Here is a quick cheat sheet summarizing exactly how your bot handles multiple users and why your database is set up this way. This is a great reference to have if the hackathon judges ask about your backend architecture!
+
+### **1. How `telebot` Handles Concurrency (No Async Needed)**
+
+* **Automatic Threading:** Instead of using `async/await`, the `telebot` library uses multi-threading in the background.
+* **One Thread per Message:** Every time a user sends a message, `telebot` spawns a brand new, temporary thread (a mini-process) just to handle that specific message.
+* **Simultaneous Users:** Because of these threads, your bot can process messages from 10 different users at the exact same time without the code getting "blocked" or making anyone wait in line.
+
+### **2. The Advantage of Opening Database Connections Inside Functions**
+
+* **Thread Safety:** SQLite is strict. If you create a database connection in your main setup code, it belongs to the "main thread." If a `telebot` worker thread tries to use that main connection, Python panics and throws a `ProgrammingError`.
+* **Private Access:** By putting `sqlite3.connect()` *inside* your function, you guarantee that every single `telebot` thread builds its own private, safe connection to the database.
+* **Prevents Lockups:** It stops the dreaded `database is locked` error. If two users message you at the exact same millisecond, they aren't fighting over the same database door.
+* **Clean Clean-Up:** By connecting, executing, and closing (`conn.close()`) all in one block, you ensure you never leave dangling connections open that could slow down your server over time.
+
+1. The Security Guard: PRAGMA foreign_keys = ON;By default, SQLite is extremely laid back. Even if you explicitly tell it that
+ the preferences table is linked to the users table, SQLite actually ignores that rule by default (for backward compatibility 
+ with really old software).  When you run PRAGMA foreign_keys = ON;, you are strictly enforcing the rules.  
+ Why it matters: Remember how we added ON DELETE CASCADE to your tables? If a user asks to delete their account, 
+ you only have to delete their ID from the main users table. Because you turned this PRAGMA rule on, SQLite will act like a 
+ smart security guard and automatically run through all the other tables (history, memory, documents) and instantly 
+ shred all of their linked data for you.
+
+When you run the command CREATE INDEX idx_history_user ON chat_history(telegram_id), you are telling the database to build 
+a hidden cheat sheet in the background.  This cheat sheet only contains two things:The telegram_id (neatly sorted in numerical 
+order).The exact Row Number where that user's message lives in the messy pile.Now, when you ask for User A's history, 
+the database doesn't look at the messy pile at all. It looks at the beautifully sorted cheat sheet, instantly sees that 
+User A's messages are at Row 1 and Row 3, and reaches right in to grab them.
+------------------------------------------------------------------------------------------------------------------------------------------
+
+
+Think of the @bot.message_handler as a Bouncer at a VIP club or a highly efficient Mail Sorter.
+
+Whenever someone sends a message to your bot, Telegram throws that message at your Python script. 
+The message_handler stands right on top of your function and looks at the incoming message. 
+It asks: "Does this message match my specific rules?"
+
+If YES, it lets the message pass through and triggers the function below it.
+
+If NO, it ignores the message and lets it fall down to the next handler.
+
+------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+1. The Content (What did they send?)
+This is the actual stuff the user wants you to see or hear.
+
+message.text — The actual words typed by the user (will be empty if they sent a photo/voice).
+
+message.content_type — A text tag telling you what kind of message it is (e.g., 'text', 'photo', 'voice').
+
+message.photo — A list containing the image data in different sizes (if they sent a picture).
+
+message.voice — The file data and duration of the audio clip (if they sent a voice note).
+
+2. The Sender (Who sent it?)
+Telegram tells you exactly who is talking to the bot.
+
+message.from_user.first_name — The user's first name (e.g., "Husaima").
+
+message.from_user.last_name — The user's last name (if they have one set).
+
+message.from_user.username — Their public @handle.
+
+message.from_user.id — A unique, permanent string of numbers tied to their specific Telegram account. This is how bots remember who you are.
+
+3. The Chat (Where did it happen?)
+This tells you where the conversation is taking place.
+
+message.chat.id — The unique ID of the conversation. This is the most important piece of data if you ever want to send a message without using bot.reply_to. You need this ID to tell Telegram exactly which chat window to push your text into.
+
+message.chat.type — Tells you if this is a private one-on-one chat ('private'), or if the bot was added to a group chat ('group' or 'supergroup').
+
+4. The Metadata (The extra details)
+message.message_id — A unique number for this exact message. You use this if you want your bot to delete or edit a specific message later.
+
+message.date — The exact date and time the message was sent (stored as a Unix timestamp).
+
+------------------------------------------------------------------------------------------------------------------------------------------
+# 1. Telegram sends photos in multiple sizes. Grab the highest resolution one.
+ file_id = message.photo[-1]
+
+
+
+🧪 Phase 1: The Onboarding Experience
+The onboarding must feel conversational and allow the user to skip at any time.  
+PDF
++ 1
+
+[ ] The "Total Skip" Test: * Action: Type /start. When it asks for permission to proceed, say, "No, skip all of this."
+
+Terminal Check: Watch for intent_to_skip to be true. Ensure it jumps straight to completed stage.
+
+[ ] The "Partial Skip" Test: * Action: Reset your user in the DB. Start onboarding. When it asks for your role and insights, say, "I am a Data Analyst, but I don't know what insights I want yet."
+
+Terminal Check: Ensure the DB saves "Data Analyst" as the role, but the insights array remains empty [], and the bot gracefully moves to the next question.
+
+[ ] The "Happy Path" Test: * Action: Reset your user. Go through the flow and give a highly detailed response: "I'm a founder. I track AAPL and TSLA. I want my briefs at 09:00."
+
+Terminal Check: Watch the [DATABASE] trace to ensure it properly extracts "AAPL" and "TSLA" into the JSON array and saves "09:00" to the DB.
+
+📈 Phase 2: Live Market Data & Timeframes
+The assistant must pull live information from trusted sources and explain why it matters.  
+PDF
++ 1
+
+[ ] The General Market Test:
+
+Action: Ask, "What are the biggest market-moving events I should know about today?"
+
+Terminal Check: Watch [FINANCE ROUTER] fetch general news from Finnhub.
+
+[ ] The Specific Stock Test:
+
+Action: Ask, "What is the live price of Nvidia, and are there any recent SEC filings?"
+
+Terminal Check: Watch [FINANCE API] pull the yfinance live price and Finnhub SEC filings for "NVDA".
+
+[ ] The Historical Date Test (Crucial Edge Case):
+
+Action: Ask, "Did Microsoft have any earnings calls last month?"
+
+Terminal Check: Watch the chat_extraction_prompt output. Verify that start_date and end_date are successfully calculated for "last month" before hitting the Finnhub API.
+
+📄 Phase 3: Documents, Voice, and Images
+The assistant must help users understand financial documents without requiring them to read hundreds of pages , and interact using text, voice, and images.  
+PDF
++ 1
+
+[ ] The PDF with Caption Test:
+
+Action: Upload a PDF (e.g., an earnings report) and type this in the caption: "Summarize the biggest risks mentioned in this document."
+
+Terminal Check: Watch [DOC UPLOAD] upload to Gemini, get the ID, and immediately trigger chat_with_document.
+
+[ ] The PDF without Caption Test (Memory Check):
+
+Action: Upload a PDF with no text. Wait for the bot to ask what you want to do. Then reply, "What was their total revenue?"
+
+Terminal Check: The bot router should flag needs_document_read: true and fetch the gemini_file_id from the database.
+
+[ ] The Image Test:
+
+Action: Send a screenshot of a stock chart and ask, "What trend do you see here?"
+
+Terminal Check: Watch [IMAGE PROCESSING] send the image to Gemini 3.5 Flash.
+
+[ ] The Voice Test:
+
+Action: Send a voice note saying, "Can you compare Apple and Google for me?"
+
+Terminal Check: Watch [AUDIO] successfully download the .ogg file and transcribe it via Whisper.
+
+🗓️ Phase 4: Google Workspace (Productivity)
+The assistant should integrate with productivity tools like Gmail and Calendar to understand daily workflows.  
+PDF
++ 1
+
+[ ] The Auth Block Test:
+
+Action: Before connecting your Google Account, ask, "Search my emails for Tesla."
+
+Terminal Check: Watch the [TOOL BLOCK] trace trigger and send you the localhost login link.
+
+[ ] The Calendar Scheduling Test:
+
+Action: Log in via the link. Then ask, "Schedule a 1-hour meeting with my team tomorrow at 3 PM to discuss earnings."
+
+Terminal Check: Watch the [CALENDAR API] trace. Ensure it calculates the timezone correctly and generates a valid Google Calendar HTML link in the output.
+
+🧠 Phase 5: Memory and Background Jobs
+The assistant should build a deeper understanding of the user over time to deliver personalized assistance.  
+PDF
++ 1
+
+[ ] The Implicit Memory Test:
+
+Action: In casual conversation, say, "By the way, I hate the crypto market. I never want to invest in Bitcoin."
+
+Terminal Check: Watch the [ROUTER] extraction JSON. It should flag a memory_update. Watch [DATABASE] insert this preference into the memory table.
+
+[ ] The "Silent" Briefing Test:
+
+Action: Go into your DB, set your user's briefing_time to 2 minutes from the current time. Wait.
+
+Terminal Check: Watch the [SCHEDULER] background thread wake up. Check if the LLM decides to send the brief OR if it sets is_silent: true because the news is boring (which proves you built an intelligent, non-spammy bot!).
+
+Run through these one by one. If your print statements show green across the board for these tests, your backend is 100% hackathon-ready!

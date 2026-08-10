@@ -1,0 +1,21 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Sensitive environment variables
+.env
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# IDE settings
+.vscode/
+.idea/
+
+# Database & temporary media files
+*.db
+assistant.db
+temp_*.ogg
+temp_*.jpg
