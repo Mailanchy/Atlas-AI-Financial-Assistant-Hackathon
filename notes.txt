@@ -187,3 +187,8 @@ Action: Go into your DB, set your user's briefing_time to 2 minutes from the cur
 Terminal Check: Watch the [SCHEDULER] background thread wake up. Check if the LLM decides to send the brief OR if it sets is_silent: true because the news is boring (which proves you built an intelligent, non-spammy bot!).
 
 Run through these one by one. If your print statements show green across the board for these tests, your backend is 100% hackathon-ready!
+
+
+
+https://atlas-ai-financial-assistant-hackathon-x0i2.onrender.com
+[0;32m[1m==> [0m[1mAvailable at your primary URL https://atlas-ai-financial-assistant-hackathon-x0i2.onrender.com[0m

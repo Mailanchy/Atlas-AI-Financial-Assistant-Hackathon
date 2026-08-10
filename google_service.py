@@ -44,8 +44,7 @@ async def login(telegram_id: int):
     flow = Flow.from_client_config(
         google_client_config,
         scopes=SCOPES,
-        redirect_uri="http://localhost:8000/auth/callback"
-    )
+        redirect_uri=f"{BASE_URL}/auth/callback"    )
     
     auth_url, _ = flow.authorization_url(
         access_type='offline',
