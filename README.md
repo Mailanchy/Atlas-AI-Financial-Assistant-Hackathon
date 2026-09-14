@@ -1,5 +1,6 @@
 # 🏦 Atlas AI Financial Assistant
-[Demo Video](https://youtu.be/_C7MW-aXu5o)
+[Demo Video](https://youtu.be/_C7MW-aXu5o)  
+
 Atlas is an elite, highly analytical AI financial assistant and executive bot built for finance professionals. It is designed to track markets, analyze documents, and seamlessly integrate into daily workflows through Telegram.
 
 This project was built during a Hackathon to demonstrate the capabilities of multimodal AI agents combined with live financial APIs and productivity tools.
